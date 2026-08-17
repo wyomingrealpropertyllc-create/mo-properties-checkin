@@ -71,6 +71,7 @@
       const [isSubmitting, setIsSubmitting] = useState(false);
       const [isSubmitted, setIsSubmitted] = useState(false);
       const [signatureMode, setSignatureMode] = useState('type'); // 'type' or 'draw'
+      const [errorMessage, setErrorMessage] = useState('');
 
       // Form State
       const [formData, setFormData] = useState({
@@ -102,14 +103,18 @@
           ...prev,
           [name]: type === 'checkbox' ? checked : value
         }));
+        if (errorMessage) setErrorMessage('');
       };
 
-      // Refresh Lucide Icons on view updates
       useEffect(() => {
-        if (window.lucide) {
-          window.lucide.createIcons();
+        try {
+          if (window.lucide && typeof window.lucide.createIcons === 'function') {
+            window.lucide.createIcons();
+          }
+        } catch (err) {
+          console.warn('Lucide icon refresh warning:', err);
         }
-      }, [step, isSubmitted, signatureMode]);
+      }, [step, isSubmitted, signatureMode, errorMessage]);
 
       const startDrawing = (e) => {
         const canvas = canvasRef.current;
@@ -160,14 +165,58 @@
         }
       };
 
-      const handleSubmit = async (e) => {
-        e.preventDefault();
-        
-        if (signatureMode === 'type' && !formData.typedSignature.trim()) {
-          alert('Please enter your full legal name as your digital signature.');
+      const handlePreFillDemo = () => {
+        const today = new Date().toISOString().split('T')[0];
+        const nextWeek = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        setFormData({
+          bookingCode: 'MO-882910',
+          checkInDate: today,
+          checkOutDate: nextWeek,
+          primaryGuestName: 'Jane Smith',
+          mobilePhone: '(555) 234-5678',
+          email: 'janesmith@example.com',
+          additionalOccupants: 'John Smith, Mark Smith',
+          hasVehicle: 'yes',
+          vehicleMakeModel: 'Ford Explorer (Blue)',
+          vehiclePlate: 'WY-77123',
+          vehicleState: 'WY',
+          agreedSafetyPolicy: true,
+          agreedMaintenancePolicy: true,
+          typedSignature: 'Jane Smith',
+          drawnSignatureData: '',
+          submittedAt: ''
+        });
+        setErrorMessage('');
+      };
+
+      const handleGoToPage2 = (e) => {
+        if (e) e.preventDefault();
+
+        // Basic validation for Page 1
+        if (!formData.bookingCode || !formData.checkInDate || !formData.checkOutDate || !formData.primaryGuestName || !formData.mobilePhone || !formData.email) {
+          setErrorMessage('Please complete all required fields on Page 1 before continuing.');
           return;
         }
 
+        setErrorMessage('');
+        setStep(2);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
+
+      const handleSubmit = async (e) => {
+        if (e) e.preventDefault();
+        
+        if (signatureMode === 'type' && !formData.typedSignature.trim()) {
+          setErrorMessage('Please enter your full legal name as your digital signature.');
+          return;
+        }
+
+        if (signatureMode === 'draw' && !formData.drawnSignatureData) {
+          setErrorMessage('Please draw your signature in the signature box before submitting.');
+          return;
+        }
+
+        setErrorMessage('');
         setIsSubmitting(true);
         const timestamp = new Date().toLocaleString('en-US', { timeZoneName: 'short' });
         
@@ -188,7 +237,7 @@
           "Submission Timestamp": timestamp
         };
 
-        // Send submission to host email via FormSubmit in background
+        // Send submission to host email via FormSubmit in background without blocking UI
         try {
           fetch(`https://formsubmit.co/ajax/${HOST_NOTIFICATION_EMAIL}`, {
             method: 'POST',
@@ -197,15 +246,16 @@
               'Accept': 'application/json'
             },
             body: JSON.stringify(payload)
-          }).catch(err => console.warn('FormSubmit notification error:', err));
+          }).catch(err => console.warn('FormSubmit notification network response:', err));
         } catch (err) {
-          console.warn('FormSubmit AJAX send attempt error:', err);
+          console.warn('FormSubmit send attempt error:', err);
         }
 
-        // Immediately transition to the Thank You / Confirmation screen
+        // Immediately show the Thank You / Confirmation Screen
         setFormData(prev => ({ ...prev, submittedAt: timestamp }));
         setIsSubmitting(false);
         setIsSubmitted(true);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       };
 
       return (
@@ -245,13 +295,40 @@
                       {step === 1 ? 'Page 1: Stay & Guest Details' : 'Page 2: Policies & Digital Signature'}
                     </h2>
                   </div>
-                  <div className="flex space-x-1.5">
-                    <div className={`w-8 h-2 rounded-full transition-all duration-300 ${step >= 1 ? 'bg-brand-600' : 'bg-slate-700'}`}></div>
-                    <div className={`w-8 h-2 rounded-full transition-all duration-300 ${step >= 2 ? 'bg-brand-600' : 'bg-slate-700'}`}></div>
+                  <div className="flex items-center space-x-3">
+                    {step === 1 && (
+                      <button
+                        type="button"
+                        onClick={handlePreFillDemo}
+                        className="hidden sm:inline-block text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded border border-slate-700 transition"
+                      >
+                        Auto-fill Sample
+                      </button>
+                    )}
+                    <div className="flex space-x-1.5">
+                      <div className={`w-8 h-2 rounded-full transition-all duration-300 ${step >= 1 ? 'bg-brand-600' : 'bg-slate-700'}`}></div>
+                      <div className={`w-8 h-2 rounded-full transition-all duration-300 ${step >= 2 ? 'bg-brand-600' : 'bg-slate-700'}`}></div>
+                    </div>
                   </div>
                 </div>
 
-                <form onSubmit={step === 2 ? handleSubmit : (e) => { e.preventDefault(); setStep(2); }} className="p-6 sm:p-8 space-y-6">
+                {errorMessage && (
+                  <div className="mx-6 mt-6 p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <i data-lucide="alert-circle" className="w-4 h-4 text-rose-600 flex-shrink-0"></i>
+                      <span>{errorMessage}</span>
+                    </div>
+                    <button 
+                      type="button" 
+                      onClick={() => setErrorMessage('')}
+                      className="text-rose-500 font-bold hover:text-rose-800 ml-2"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+
+                <form onSubmit={step === 2 ? handleSubmit : handleGoToPage2} className="p-6 sm:p-8 space-y-6">
                   
                   {/* ========================================================= */}
                   {/* PAGE 1: STAY & GUEST REGISTRATION DETAILS                 */}
@@ -259,7 +336,7 @@
                   {step === 1 && (
                     <div className="space-y-6">
                       
-                      {/* Reservation Information */}
+                      {}
                       <div className="bg-slate-50 p-4 sm:p-5 rounded-xl border border-slate-200 space-y-4">
                         <div className="flex items-center text-slate-900 font-bold text-sm border-b pb-2 border-slate-200">
                           <i data-lucide="key" className="w-4 h-4 mr-2 text-brand-600"></i>
@@ -310,7 +387,6 @@
                         </div>
                       </div>
 
-                      {/* Primary Guest Contact Information */}
                       {}
                       <div className="bg-slate-50 p-4 sm:p-5 rounded-xl border border-slate-200 space-y-4">
                         <div className="flex items-center text-slate-900 font-bold text-sm border-b pb-2 border-slate-200">
@@ -367,7 +443,6 @@
                         </div>
                       </div>
 
-                      {/* Additional Occupants & Vehicle Registration */}
                       {}
                       <div className="bg-slate-50 p-4 sm:p-5 rounded-xl border border-slate-200 space-y-4">
                         <div className="flex items-center text-slate-900 font-bold text-sm border-b pb-2 border-slate-200">
@@ -460,10 +535,18 @@
                         </div>
                       </div>
 
-                      <div className="flex justify-end pt-2">
+                      <div className="flex justify-between items-center pt-2">
+                        <button
+                          type="button"
+                          onClick={handlePreFillDemo}
+                          className="sm:hidden text-xs text-brand-600 hover:underline font-semibold"
+                        >
+                          Auto-fill Sample
+                        </button>
+
                         <button
                           type="submit"
-                          className="w-full sm:w-auto bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm px-8 py-3 rounded-xl transition flex items-center justify-center space-x-2 shadow-lg shadow-brand-600/30"
+                          className="w-full sm:w-auto ml-auto bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm px-8 py-3 rounded-xl transition flex items-center justify-center space-x-2 shadow-lg shadow-brand-600/30"
                         >
                           <span>Continue to Page 2</span>
                           <i data-lucide="arrow-right" className="w-4 h-4"></i>
@@ -475,11 +558,10 @@
                   {/* ========================================================= */}
                   {/* PAGE 2: POLICIES & DIGITAL SIGNATURE                      */}
                   {/* ========================================================= */}
-                  {}
                   {step === 2 && (
                     <div className="space-y-6">
                       
-                      {/* Purpose and Policy Statement */}
+                      {}
                       <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 space-y-3">
                         <h3 className="font-bold text-slate-900 text-sm flex items-center">
                           <i data-lucide="shield-check" className="w-4 h-4 text-brand-600 mr-2"></i>
@@ -494,7 +576,7 @@
                         </ul>
                       </div>
 
-                      {/* Explicit Consent Checkboxes */}
+                      {}
                       <div className="space-y-3 bg-white p-4 rounded-xl border border-slate-200">
                         <label className="flex items-start space-x-3 cursor-pointer">
                           <input
@@ -525,7 +607,6 @@
                         </label>
                       </div>
 
-                      {/* Digital Signature Area */}
                       {}
                       <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 space-y-4">
                         <div className="flex items-center justify-between border-b pb-2 border-slate-200">
@@ -560,7 +641,6 @@
                               onChange={handleChange}
                               placeholder="Type full legal name to sign"
                               className="w-full text-sm font-serif italic px-3 py-3 border rounded-lg bg-white focus:ring-2 focus:ring-brand-600 focus:outline-none"
-                              required
                             />
                             <p className="text-[11px] text-slate-500 mt-1">
                               Typing your full legal name serves as your binding electronic signature.
@@ -577,9 +657,9 @@
                                 onMouseMove={draw}
                                 onMouseUp={stopDrawing}
                                 onMouseLeave={stopDrawing}
-                               onTouchStart={startDrawing}
-                               onTouchMove={draw}
-                               onTouchEnd={stopDrawing}
+                                onTouchStart={startDrawing}
+                                onTouchMove={draw}
+                                onTouchEnd={stopDrawing}
                                 className="w-full h-28 signature-canvas cursor-crosshair"
                               ></canvas>
                             </div>
@@ -601,7 +681,7 @@
                       <div className="flex items-center justify-between pt-2">
                         <button
                           type="button"
-                          onClick={() => setStep(1)}
+                          onClick={() => { setErrorMessage(''); setStep(1); }}
                           className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-sm px-6 py-3 rounded-xl transition flex items-center space-x-2"
                         >
                           <i data-lucide="arrow-left" className="w-4 h-4"></i>
@@ -632,8 +712,8 @@
               /* ========================================================= */
               /* SUCCESS & THANK YOU CONFIRMATION SCREEN                   */
               /* ========================================================= */
-              <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-6 sm:p-10 text-center space-y-6">
-                <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner animate-bounce">
+              <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-6 sm:p-10 text-center space-y-6 animate-fade-in">
+                <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
                   <i data-lucide="check-circle-2" className="w-10 h-10"></i>
                 </div>
 
@@ -645,7 +725,7 @@
                     Thank You for Your Submission!
                   </h2>
                   <p className="text-sm text-slate-600 max-w-md mx-auto">
-                    Thank you, <strong>{formData.primaryGuestName}</strong>. Your check-in registration and compliance agreement have been received by MO Properties.
+                    Thank you, <strong>{formData.primaryGuestName || 'Guest'}</strong>. Your check-in registration and compliance agreement have been received by MO Properties.
                   </p>
                 </div>
 
@@ -696,6 +776,34 @@
                   >
                     <i data-lucide="printer" className="w-4 h-4"></i>
                     <span>Print or Save Access Pass</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setIsSubmitted(false);
+                      setStep(1);
+                      setFormData({
+                        bookingCode: '',
+                        checkInDate: '',
+                        checkOutDate: '',
+                        primaryGuestName: '',
+                        mobilePhone: '',
+                        email: '',
+                        additionalOccupants: '',
+                        hasVehicle: 'no',
+                        vehicleMakeModel: '',
+                        vehiclePlate: '',
+                        vehicleState: '',
+                        agreedSafetyPolicy: true,
+                        agreedMaintenancePolicy: true,
+                        typedSignature: '',
+                        drawnSignatureData: '',
+                        submittedAt: ''
+                      });
+                    }}
+                    className="inline-flex items-center justify-center space-x-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs px-5 py-3 rounded-lg transition"
+                  >
+                    <span>Start New Check-In</span>
                   </button>
                 </div>
               </div>
