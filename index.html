@@ -188,19 +188,21 @@
           "Submission Timestamp": timestamp
         };
 
+        // Send submission to host email via FormSubmit in background
         try {
-          await fetch(`https://formsubmit.co/ajax/${HOST_NOTIFICATION_EMAIL}`, {
+          fetch(`https://formsubmit.co/ajax/${HOST_NOTIFICATION_EMAIL}`, {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',
               'Accept': 'application/json'
             },
             body: JSON.stringify(payload)
-          });
+          }).catch(err => console.warn('FormSubmit notification error:', err));
         } catch (err) {
-          console.warn('FormSubmit AJAX notification sent:', err);
+          console.warn('FormSubmit AJAX send attempt error:', err);
         }
 
+        // Immediately transition to the Thank You / Confirmation screen
         setFormData(prev => ({ ...prev, submittedAt: timestamp }));
         setIsSubmitting(false);
         setIsSubmitted(true);
@@ -628,17 +630,22 @@
               </div>
             ) : (
               /* ========================================================= */
-              /* SUCCESS CONFIRMATION SCREEN                               */
+              /* SUCCESS & THANK YOU CONFIRMATION SCREEN                   */
               /* ========================================================= */
               <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-6 sm:p-10 text-center space-y-6">
-                <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
-                  <i data-lucide="check" className="w-8 h-8"></i>
+                <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner animate-bounce">
+                  <i data-lucide="check-circle-2" className="w-10 h-10"></i>
                 </div>
 
                 <div className="space-y-2">
-                  <h2 className="text-2xl font-bold text-slate-900">Registration Complete!</h2>
+                  <span className="bg-emerald-100 text-emerald-800 text-xs px-3 py-1 rounded-full font-bold uppercase tracking-wider">
+                    Check-In Successful
+                  </span>
+                  <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 pt-2">
+                    Thank You for Your Submission!
+                  </h2>
                   <p className="text-sm text-slate-600 max-w-md mx-auto">
-                    Thank you, <strong>{formData.primaryGuestName}</strong>. Your check-in information has been registered with MO Properties.
+                    Thank you, <strong>{formData.primaryGuestName}</strong>. Your check-in registration and compliance agreement have been received by MO Properties.
                   </p>
                 </div>
 
@@ -648,11 +655,11 @@
                   
                   <div className="flex justify-between items-start border-b border-slate-800 pb-3 mb-4">
                     <div>
-                      <span className="text-[10px] uppercase tracking-widest text-brand-600 font-bold">Stay Access Pass</span>
+                      <span className="text-[10px] uppercase tracking-widest text-brand-600 font-bold">Verified Check-In Pass</span>
                       <h3 className="font-bold text-base text-white">MO Properties</h3>
                     </div>
                     <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] px-2 py-0.5 rounded font-mono uppercase font-bold">
-                      Verified
+                      Confirmed
                     </span>
                   </div>
 
@@ -682,10 +689,10 @@
                   </div>
                 </div>
 
-                <div className="pt-4">
+                <div className="pt-2 flex flex-col sm:flex-row justify-center gap-3">
                   <button
                     onClick={() => window.print()}
-                    className="inline-flex items-center space-x-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs px-5 py-2.5 rounded-lg transition"
+                    className="inline-flex items-center justify-center space-x-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs px-5 py-3 rounded-lg transition"
                   >
                     <i data-lucide="printer" className="w-4 h-4"></i>
                     <span>Print or Save Access Pass</span>
